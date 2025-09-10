@@ -1,0 +1,134 @@
+# 🧬 FiloSegGUI — A Deep Learning GUI for Fungal Cell Segmentation
+
+**FiloSegGUI** is a PySide6-powered graphical user interface for applying and retraining deep learning-based segmentation models (Omnipose and Cellpose) on fungal microscopy images.
+
+It supports:
+- Single image and batch segmentation
+- Retraining with custom image/mask datasets
+- Easy toggling between pretrained models
+- Overlay visualization of segmentation results
+
+---
+
+## 📁 Project Structure
+
+FiloSegGUI/
+├── FiloGUI_models/ # Pretrained .pth models go here
+├── main.py # The GUI application
+├── requirements.txt # Python dependencies
+├── README.md # Project documentation
+└── .gitignore # (Optional) Ignore cache/files
+
+yaml
+Copy
+Edit
+
+---
+
+## 🔧 Installation Guide
+
+### 📦 Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/FiloSegGUI.git
+cd FiloSegGUI
+🐍 Step 2: Create a Conda Environment (Recommended)
+Use Python 3.8.5 — this is the most compatible version for Omnipose + GUI.
+
+bash
+Copy
+Edit
+conda create -n filoseg python=3.8.5
+conda activate filoseg
+🔥 Step 3: Install PyTorch
+If you have a GPU:
+
+bash
+Copy
+Edit
+conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
+If you’re using CPU only:
+
+bash
+Copy
+Edit
+conda install pytorch torchvision cpuonly -c pytorch
+✅ Step 4: Install Python Requirements
+bash
+Copy
+Edit
+pip install -r requirements.txt
+This includes:
+
+Omnipose (older stable commit)
+
+GUI libraries (PySide6, tifffile, matplotlib, etc.)
+
+Torch, NumPy, Pillow
+
+🚀 Run the GUI
+bash
+Copy
+Edit
+python main.py
+📂 Pretrained Models
+All pretrained models should be placed in the FiloGUI_models/ directory. This includes:
+
+Coni_4.pth
+
+FilaTip_6.pth
+
+Retrain_omni_4.pth
+
+... and others
+
+The models are referenced using relative paths like:
+
+python
+Copy
+Edit
+"./FiloGUI_models/Coni_4.pth"
+✅ Pro Tip: You can upload only small .pth examples and link to larger ones using GitHub Releases or Google Drive.
+
+🧪 Retraining Models
+To retrain:
+
+Go to the "Retrain" tab.
+
+Choose a folder of images and select the corresponding mask suffix (_cp_masks by default).
+
+Select a pretrained .pth model as your base.
+
+Start training — the model will be saved in the models/ subfolder.
+
+🧠 Dependencies
+Python 3.8.5
+
+PyTorch 2.5.1
+
+Omnipose (commit 04b09e7)
+
+PySide6 6.9.0
+
+numpy, pillow, matplotlib, tifffile, natsort
+
+🛠 Troubleshooting
+If you see an error like:
+
+vbnet
+Copy
+Edit
+cellpose not found. Error: The 'cellpose' distribution was not found
+Install Cellpose CLI manually:
+
+bash
+Copy
+Edit
+pip install cellpose
+📄 License
+MIT License © 2025 Arsalan Taassob
+
+🤝 Acknowledgements
+Cellpose
+
+Omnipose
