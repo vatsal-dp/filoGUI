@@ -9,13 +9,100 @@ import subprocess
 import sys
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QStackedWidget, QFileDialog, QMessageBox
+    QPushButton, QLabel, QStackedWidget, QFileDialog, QMessageBox, QGroupBox, QFrame, QScrollArea
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 import torch
 torch.backends.mkldnn.enabled = False
 import numpy as np
+
+class ModelsView(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.models = {
+            "Coni_4": os.path.join("FiloGUI_models", "Coni_4.pth"),
+            "ConidioBUD": os.path.join("FiloGUI_models", "ConidioBUD.pth"),
+            "FilaBranch": os.path.join("FiloGUI_models", "FilaBranch.pth"),
+            "FilaCross_1": os.path.join("FiloGUI_models", "FilaCross_1.pth"),
+            "FilaSeptum_3": os.path.join("FiloGUI_models", "FilaSeptum_3.pth"),
+            "FilaTip_6": os.path.join("FiloGUI_models", "FilaTip_6.pth"),
+            "Retrain_omni_5": os.path.join("FiloGUI_models", "Retrain_omni_5.pth")
+        }
+
+        self.selected_model = None
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+        self.label = QLabel("Select a model:")
+        self.label.setStyleSheet("font-size: 16px; font-weight: bold; margin: 10px 0;")
+        self.layout.addWidget(self.label)
+
+        # Create horizontal layout for buttons
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)  # Left align the buttons
+
+        self.buttons = {}
+        for name in self.models:
+            btn = QPushButton(name)
+            btn.setFixedWidth(120)  # Slightly smaller width for horizontal layout
+            btn.setFixedHeight(40)   # Set consistent height
+            btn.setStyleSheet("""
+            QPushButton {
+                text-align: center;
+                padding: 8px 12px;
+                background-color: white;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin: 2px;
+                color: black;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #f5f5f5;
+                border-color: #999;
+            }
+            QPushButton:checked {
+                background-color: #0078d4;
+                color: white;
+                border-color: #0078d4;
+            }
+            """)
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, n=name: self.select_model(n))
+            self.buttons[name] = btn
+            buttons_layout.addWidget(btn)
+            
+            # Add small spacing between buttons
+            buttons_layout.addSpacing(5)
+
+        # Add stretch at the end to push buttons to the left
+        buttons_layout.addStretch()
+        
+        # Add the horizontal buttons layout to the main layout
+        self.layout.addLayout(buttons_layout)
+        
+        # Add stretch to push everything to the top
+        self.layout.addStretch()
+
+        self.status = QLabel("No model selected.")
+        self.status.setStyleSheet("font-size: 12px; color: #666; margin-top: 10px;")
+        self.status.setAlignment(Qt.AlignmentFlag.AlignLeft)  # Left align the status text
+        self.layout.addWidget(self.status)
+
+    def select_model(self, model_name):
+        # Uncheck all other buttons
+        for name, button in self.buttons.items():
+            button.setChecked(name == model_name)
+        
+        self.selected_model = model_name
+        self.status.setText(f"Selected: {model_name}")
+
+    def add_model(self, model_name, path):
+        self.models[model_name] = path
+        # For simplicity, just update the dict and select it
+        self.select_model(model_name)
 
 class ImageView(QWidget):
     def __init__(self, models_view):
@@ -25,116 +112,57 @@ class ImageView(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        # === Display Area for Original and Masked Images ===
-        self.image_row = QHBoxLayout()
-        
-        # === Left Column for Model Name and Original Image ===
-        self.left_image_column = QVBoxLayout()
-        
-        # Model Name Label (above original image)
+        # === Model Name Label (above image) ===
         self.model_name_label = QLabel("")
         self.model_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.model_name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        self.left_image_column.addWidget(self.model_name_label)
-        
-        # Original Image
-        self.image_label_original = QLabel()
-        self.image_label_original.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.left_image_column.addWidget(self.image_label_original)
-        
-        self.image_row.addLayout(self.left_image_column)
-        
-        # === Right: Segmentation Result ===
-        self.image_label_masked = QLabel()
-        self.image_label_masked.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_row.addWidget(self.image_label_masked)
-        
-        self.layout.addLayout(self.image_row)
+        self.model_name_label.setStyleSheet("font-weight: bold; font-size: 14px; margin: 10px 0;")
+        self.layout.addWidget(self.model_name_label)
 
+        # === Single Centered Image Display ===
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.image_label.setMinimumSize(600, 600)  # Set minimum size for better display
+        # self.image_label.setStyleSheet("border: 1px solid #ddd; background-color: #f9f9f9;")
+        self.layout.addWidget(self.image_label)
 
-        # === Section: Single Image Tools ===
-        self.single_image_label = QLabel("🖼️ Single Image Preview")
-        self.layout.addWidget(self.single_image_label)
-
-        # Load Image Button
-        self.load_btn = QPushButton("Load Image")
-        self.load_btn.setFixedWidth(200)
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(self.load_btn)
-        btn_layout.addStretch()
-        self.layout.addLayout(btn_layout)
-        self.load_btn.clicked.connect(self.load_image)
-
-        # Run Single Image Segmentation Button
-        self.segment_single_btn = QPushButton("Run Single Image Segmentation")
-        self.segment_single_btn.setFixedWidth(200)
-        btn_layout2 = QHBoxLayout()
-        btn_layout2.addWidget(self.segment_single_btn)
-        btn_layout2.addStretch()
-        self.layout.addLayout(btn_layout2)
-        self.segment_single_btn.clicked.connect(self.run_single_image_segmentation)
-
-        # Compare Segmentations Button
-        self.compare_btn = QPushButton("Compare Segmentations")
-        self.compare_btn.setFixedWidth(200)
-        btn_layout3 = QHBoxLayout()
-        btn_layout3.addWidget(self.compare_btn)
-        btn_layout3.addStretch()
-        self.layout.addLayout(btn_layout3)
-        self.compare_btn.clicked.connect(self.compare_segmentations)
-
-        self.layout.addSpacing(10)
-
-        # Overlay navigation
-        self.overlay_index = 0
-        self.overlay_pixmaps = []
-        
+        # === Navigation Controls (Horizontal) ===
         nav_layout = QHBoxLayout()
+        nav_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         self.prev_btn = QPushButton("⬅️ Previous")
         self.prev_btn.setFixedWidth(100)
         self.prev_btn.clicked.connect(self.show_prev_overlay)
         nav_layout.addWidget(self.prev_btn)
+
+        nav_layout.addSpacing(20)  # Space between buttons
 
         self.next_btn = QPushButton("➡️ Next")
         self.next_btn.setFixedWidth(100)
         self.next_btn.clicked.connect(self.show_next_overlay)
         nav_layout.addWidget(self.next_btn)
 
-        nav_layout.addStretch()
         self.layout.addLayout(nav_layout)
 
         self.prev_btn.setEnabled(False)
         self.next_btn.setEnabled(False)
 
-        self.layout.addSpacing(20)
-
-        # === Section: Folder-Based Batch Segmentation ===
-        self.batch_label = QLabel("📂 Folder-Based Segmentation")
-        self.layout.addWidget(self.batch_label)
-
-        self.folder_seg_btn = QPushButton("Run Folder Segmentation")
-        self.folder_seg_btn.setFixedWidth(200)
-        btn_layout4 = QHBoxLayout()
-        btn_layout4.addWidget(self.folder_seg_btn)
-        btn_layout4.addStretch()
-        self.layout.addLayout(btn_layout4)
-        self.folder_seg_btn.clicked.connect(self.run_cli_segmentation)
-
+        # Overlay navigation properties
+        self.overlay_index = 0
+        self.overlay_pixmaps = []
 
     def show_next_overlay(self):
         if not self.overlay_pixmaps:
             return
         self.overlay_index = (self.overlay_index + 1) % len(self.overlay_pixmaps)
-        self.image_label_masked.setPixmap(self.overlay_pixmaps[self.overlay_index].scaled(400, 400, Qt.KeepAspectRatio))
+        self.image_label.setPixmap(self.overlay_pixmaps[self.overlay_index].scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.model_name_label.setText(self.overlay_model_names[self.overlay_index])
 
     def show_prev_overlay(self):
         if not self.overlay_pixmaps:
             return
         self.overlay_index = (self.overlay_index - 1) % len(self.overlay_pixmaps)
-        self.image_label_masked.setPixmap(self.overlay_pixmaps[self.overlay_index].scaled(400, 400, Qt.KeepAspectRatio))
+        self.image_label.setPixmap(self.overlay_pixmaps[self.overlay_index].scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.model_name_label.setText(self.overlay_model_names[self.overlay_index])
-
 
     def load_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -153,13 +181,12 @@ class ImageView(QWidget):
         if file_path:
             self.current_image_path = file_path
             print(f"✅ Image selected: {file_path}")
+            
+            # Clear the display and show just a placeholder
+            self.image_label.clear()
+            self.image_label.setText("Image loaded. Run segmentation to see overlay.")
+            self.model_name_label.setText("")
 
-
-                
-
-
-                
-                
     def compare_segmentations(self):
         from PySide6.QtCore import QTimer
         import tifffile
@@ -171,13 +198,6 @@ class ImageView(QWidget):
         if not hasattr(self, 'current_image_path') or not os.path.exists(self.current_image_path):
             QMessageBox.warning(self, "No Image", "Please load an image first.")
             return
-    
-    
-
-    
-    
-    
-    
     
         model_keys = ["FilaBranch", "FilaTip_6", "Retrain_omni_5","Coni_4","ConidioBUD","FilaCross_1","FilaSeptum_3"]
         image_path = self.current_image_path
@@ -263,20 +283,17 @@ class ImageView(QWidget):
     
             if self.overlay_pixmaps:
                 self.overlay_index = 0
-                self.image_label_masked.setPixmap(self.overlay_pixmaps[0].scaled(400, 400, Qt.KeepAspectRatio))
-                self.model_name_label.setText(self.overlay_model_names[0])  # Show first model name
+                self.image_label.setPixmap(self.overlay_pixmaps[0].scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                self.model_name_label.setText(self.overlay_model_names[0])
     
                 self.prev_btn.setEnabled(True)
                 self.next_btn.setEnabled(True)
     
-                self.image_label_original.clear()
                 QMessageBox.information(self, "Done", "Compared segmentations are displayed.")
     
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-
-                
     def run_single_image_segmentation(self):
         if not hasattr(self, 'current_image_path') or not os.path.exists(self.current_image_path):
             QMessageBox.warning(self, "No Image", "Please load an image first.")
@@ -315,7 +332,6 @@ class ImageView(QWidget):
 
         # Update path so CLI sees scaled version
         image_basename = os.path.splitext(os.path.basename(temp_path))[0]
-
     
         # Build command
         if "omni" in model_key.lower():
@@ -329,17 +345,11 @@ class ImageView(QWidget):
             command = (
                 f'cellpose --dir "{image_folder}" '
                 f'--pretrained_model "{model_path}" --verbose --chan 0 --chan2 0 --use_gpu '
-                f'--cellprob_threshold 0.0 --flow_threshold 0.4 '  # Much more sensitive thresholds
-                f'--diameter 0 '  # Let cellpose estimate diameter
+                f'--cellprob_threshold 0.0 --flow_threshold 0.4 '
+                f'--diameter 0 '
                 f'--save_tif --savedir "{save_dir}" '
                 f'--img_filter "{image_basename}"'
             )
-            # command = (
-            #     f'cellpose --dir "{image_folder}" '
-            #     f'--pretrained_model "{model_path}" --verbose --chan 0 --chan2 0 --use_gpu '
-            #     f'--cellprob_threshold 0.5 --flow_threshold 0.9  --save_tif --savedir "{save_dir}" '
-            #     f'--img_filter "{image_basename}"'
-            # )
     
         print(f"🔧 Running command:\n{command}")
     
@@ -368,8 +378,6 @@ class ImageView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Execution Error", str(e))
 
-
-
     def run_segmentation(self):
         pass  # Your original model.eval() segmentation code can go here if needed.
 
@@ -387,8 +395,6 @@ class ImageView(QWidget):
             "",
             QFileDialog.Option(QFileDialog.DontUseNativeDialog)
         )
-
-
 
         # If the user cancels or picks nothing
         if not folder_path or folder_path.strip() == "":
@@ -440,7 +446,6 @@ class ImageView(QWidget):
 
         # ✅ Point CLI command to scaled_dir instead of original self.image_dir
         self.image_dir = scaled_dir
-
     
         # STEP 4: Build command
         if "omni" in model_key.lower():
@@ -451,20 +456,14 @@ class ImageView(QWidget):
                 f'--savedir "{self.save_dir}" '
                 f'--look_one_level_down --no_npy'
             )
-
         else:
             command = (
                 f'cellpose --dir "{self.image_dir}" '
                 f'--pretrained_model "{model_path}" --verbose --use_gpu --chan 0 --chan2 0 '
-                f'--cellprob_threshold 0.0 --flow_threshold 0.4 '  # More sensitive
-                f'--diameter 0 '  # Let cellpose estimate
+                f'--cellprob_threshold 0.0 --flow_threshold 0.4 '
+                f'--diameter 0 '
                 f'--save_tif --savedir "{self.save_dir}"'
             )
-            # command = (
-            #     f'cellpose --dir "{self.image_dir}" '
-            #     f'--pretrained_model "{model_path}" --verbose --use_gpu --chan 0 --chan2 0 --cellprob_threshold 0.5 --flow_threshold 0.9 '
-            #     f'  --save_tif --savedir "{self.save_dir}"'
-            # )
     
         # STEP 5: Run the command
         try:
@@ -476,12 +475,6 @@ class ImageView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-
-
-
-
-
-
     def try_show_mask_from_save(self):
         import os, io
         import tifffile
@@ -489,14 +482,14 @@ class ImageView(QWidget):
         from PIL import Image
         import matplotlib.pyplot as plt
     
-        print(f"📁 Checking folder: {self.save_dir}")
+        print(f"🔍 Checking folder: {self.save_dir}")
         if not os.path.exists(self.save_dir):
             print("❌ Save folder not created yet.")
             return
     
         mask_files = [f for f in os.listdir(self.save_dir) if f.endswith("_cp_masks.tif")]
         if not mask_files:
-            print("⌛ No masks found yet.")
+            print("⏳ No masks found yet.")
             return
     
         mask_file = mask_files[0]
@@ -540,28 +533,13 @@ class ImageView(QWidget):
 
             print(f"🔍 DEBUG - Image after normalization shape: {img_uint8.shape}, dtype: {img_uint8.dtype}")
             print(f"🔍 DEBUG - Normalized image min/max: {img_uint8.min()}/{img_uint8.max()}")  
-    
-            original_pil = Image.fromarray(img_uint8)
-            buf_orig = io.BytesIO()
-            original_pil.save(buf_orig, format="PNG")
-            buf_orig.seek(0)
-    
-            pixmap_orig = QPixmap()
-            pixmap_orig.loadFromData(buf_orig.read(), "PNG")
-            self.image_label_original.setPixmap(pixmap_orig.scaled(400, 400, Qt.KeepAspectRatio))
 
             print(f"🔍 DEBUG - Image for overlay shape: {image.shape}")
             print(f"🔍 DEBUG - Mask for overlay shape: {mask.shape}")
             print(f"🔍 DEBUG - Mask for overlay unique values: {np.unique(mask)}")
             print(f"🔍 DEBUG - Non-zero mask pixels count: {np.count_nonzero(mask)}")
     
-            # === Process mask overlay image using matplotlib ===
-            # fig, ax = plt.subplots(figsize=(5, 5), facecolor='black')
-            # ax.set_facecolor('black')
-            # ax.imshow(image, cmap='gray', interpolation='nearest')
-            # ax.imshow(mask, alpha=1, cmap='jet', interpolation='nearest')
-            # ax.axis('off')
-
+            # === Create overlay image ===
             image_rgb = np.stack([img_uint8] * 3, axis=-1)
         
             # Create colored mask with jet colormap
@@ -582,14 +560,16 @@ class ImageView(QWidget):
             overlay_pil = Image.fromarray(blended)
     
             buf = io.BytesIO()
-            # plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
-            # plt.close()
             overlay_pil.save(buf, format="PNG")
             buf.seek(0)
     
             pixmap_mask = QPixmap()
             pixmap_mask.loadFromData(buf.read(), "PNG")
-            self.image_label_masked.setPixmap(pixmap_mask.scaled(400, 400, Qt.KeepAspectRatio))
+            self.image_label.setPixmap(pixmap_mask.scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            
+            # Set the model name
+            if hasattr(self, 'models_view') and self.models_view.selected_model:
+                self.model_name_label.setText(self.models_view.selected_model)
     
             QMessageBox.information(self, "Done", "Segmentation overlay displayed.")
     
@@ -599,7 +579,7 @@ class ImageView(QWidget):
             QMessageBox.critical(self, "Display Error", str(e))
 
 
-
+    # (Methods remain unchanged: select_image_folder, select_model, run_training)
 class RetrainModelView(QWidget):
     def __init__(self):
         super().__init__()
@@ -610,44 +590,45 @@ class RetrainModelView(QWidget):
         self.image_dir = ""
         self.model_path = ""
 
-        self.layout.addWidget(QLabel("📁 Select Training Image Directory"))
-
+        # Horizontal layout for folder selection
+        folder_layout = QHBoxLayout()
+        folder_layout.addWidget(QLabel("📁 Select Training Image Directory:"))
         self.image_btn = QPushButton("Choose Image Folder")
         self.image_btn.setFixedWidth(200)
-        btn_layout1 = QHBoxLayout()
-        btn_layout1.addWidget(self.image_btn)
-        btn_layout1.addStretch()
-        self.layout.addLayout(btn_layout1)
         self.image_btn.clicked.connect(self.select_image_folder)
+        folder_layout.addWidget(self.image_btn)
+        folder_layout.addStretch()
+        self.layout.addLayout(folder_layout)
 
-        self.layout.addWidget(QLabel("🧠 Select Pretrained Model (.pth)"))
-
+        # Horizontal layout for model selection
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("🧠 Select Pretrained Model (.pth):"))
         self.model_btn = QPushButton("Choose Model")
         self.model_btn.setFixedWidth(200)
-        btn_layout2 = QHBoxLayout()
-        btn_layout2.addWidget(self.model_btn)
-        btn_layout2.addStretch()
-        self.layout.addLayout(btn_layout2)
         self.model_btn.clicked.connect(self.select_model)
+        model_layout.addWidget(self.model_btn)
+        model_layout.addStretch()
+        self.layout.addLayout(model_layout)
 
-        self.layout.addWidget(QLabel("🧪 Enter Mask Filter (e.g. _cp_masks)"))
-
+        # Horizontal layout for mask filter
+        mask_layout = QHBoxLayout()
+        mask_layout.addWidget(QLabel("🧪 Enter Mask Filter (e.g. _cp_masks):"))
         self.mask_filter = QLabel("_cp_masks")
-        self.layout.addWidget(self.mask_filter)
+        mask_layout.addWidget(self.mask_filter)
+        mask_layout.addStretch()
+        self.layout.addLayout(mask_layout)
 
+        # Horizontal layout for training button
+        train_layout = QHBoxLayout()
         self.train_btn = QPushButton("Start Retraining")
         self.train_btn.setFixedWidth(200)
-        btn_layout3 = QHBoxLayout()
-        btn_layout3.addWidget(self.train_btn)
-        btn_layout3.addStretch()
-        self.layout.addLayout(btn_layout3)
         self.train_btn.clicked.connect(self.run_training)
+        train_layout.addWidget(self.train_btn)
+        train_layout.addStretch()
+        self.layout.addLayout(train_layout)
 
         self.status = QLabel("")
         self.layout.addWidget(self.status)
-
-    # (Methods remain unchanged: select_image_folder, select_model, run_training)
-
 
     def select_image_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Image Directory")
@@ -729,9 +710,6 @@ class RetrainModelView(QWidget):
 
 
 
-
-
-
 class PlaceholderView(QWidget):
     def __init__(self, name):
         super().__init__()
@@ -754,20 +732,18 @@ class AddModelView(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        self.label = QLabel("Upload your own model (.pth)")
-        self.layout.addWidget(self.label)
-
+        # Horizontal layout for model upload
+        upload_layout = QHBoxLayout()
+        upload_layout.addWidget(QLabel("Upload your own model (.pth):"))
         self.upload_btn = QPushButton("Browse and Add Model")
         self.upload_btn.setFixedWidth(200)
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(self.upload_btn)
-        btn_layout.addStretch()
-        self.layout.addLayout(btn_layout)
+        self.upload_btn.clicked.connect(self.upload_model)
+        upload_layout.addWidget(self.upload_btn)
+        upload_layout.addStretch()
+        self.layout.addLayout(upload_layout)
 
         self.status = QLabel("")
         self.layout.addWidget(self.status)
-
-        self.upload_btn.clicked.connect(self.upload_model)
 
     def upload_model(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -783,151 +759,162 @@ class AddModelView(QWidget):
         else:
             self.status.setText("⚠️ No model selected.")
 
-
- 
-
-
-
-class ModelsView(QWidget):
-    def __init__(self):
-        super().__init__()
-
-
-
-
-        self.models = {
-            "Coni_4": os.path.join("FiloGUI_models", "Coni_4.pth"),
-            "ConidioBUD": os.path.join("FiloGUI_models", "ConidioBUD.pth"),
-            "FilaBranch": os.path.join("FiloGUI_models", "FilaBranch.pth"),
-            "FilaCross_1": os.path.join("FiloGUI_models", "FilaCross_1.pth"),
-            "FilaSeptum_3": os.path.join("FiloGUI_models", "FilaSeptum_3.pth"),
-            "FilaTip_6": os.path.join("FiloGUI_models", "FilaTip_6.pth"),
-            "Retrain_omni_5": os.path.join("FiloGUI_models", "Retrain_omni_5.pth")
-        }
-
-
-      
-
-        self.selected_model = None
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
-
-        self.label = QLabel("Select a model:")
-        self.layout.addWidget(self.label)
-
-        self.buttons = {}
-        for name in self.models:
-            self._add_model_button(name)
-
-        # self.status = QLabel("No model selected.")
-        # self.layout.addWidget(self.status)
-
-    def _add_model_button(self, model_name):
-        btn = QPushButton(model_name)
-        btn.setFixedWidth(200)
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(btn)
-        btn_layout.addStretch()
-        self.layout.addLayout(btn_layout)
-        btn.clicked.connect(lambda checked, n=model_name: self.select_model(n))
-        self.buttons[model_name] = btn
-
-    def select_model(self, model_name):
-        self.selected_model = model_name
-        self.status.setText(f"Selected: {model_name}\nPath: {self.models[model_name]}")
-
-    def add_model(self, model_name, path):
-        self.models[model_name] = path
-        self._add_model_button(model_name)
-        self.select_model(model_name)
-
-
-
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QStackedWidget, QGroupBox
-)
-from PySide6.QtCore import Qt
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Segmentation GUI")
-        self.setGeometry(100, 100, 900, 600)
+        self.setGeometry(100, 100, 1200, 700)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
+        main_layout = QVBoxLayout(central_widget)
 
-        # === Left Side Menu with GroupBox ===
-        side_group = QGroupBox("Navigation")
-        side_layout = QVBoxLayout()
+        # === Top Navigation Bar with ALL buttons ===
+        nav_group = QGroupBox("Controls")
+        nav_layout = QHBoxLayout()
+        nav_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center the entire layout
 
         btn_style = """
         QPushButton {
-            padding: 5px;
+            padding: 8px 8px;
             background-color: #f0f0f0;
             border: 1px solid #aaa;
             border-radius: 3px;
+            min-width: 30px;
+            min-height: 20px;
+            margin: 2px;
+            color: black;
+            font-weight: bold;
+            font-size: 18px;  
+            alignment: center;          
         }
         QPushButton:hover {
             background-color: #ddd;
         }
+        QPushButton:pressed {
+            background-color: #ccc;
+        }
+        QPushButton:checked {
+            background-color: #0078d4;
+            color: white;
+            border-color: #0078d4;
+        }
         """
 
-        models_btn = QPushButton("Models")
-        models_btn.setFixedWidth(130)
+        # Add flexible spacing before buttons to center them
+        nav_layout.addStretch(1)
+
+        # View navigation buttons with icons
+        models_btn = QPushButton("⚙")
         models_btn.setStyleSheet(btn_style)
-        side_layout.addWidget(models_btn)
+        models_btn.setCheckable(True)
+        models_btn.setToolTip("Models")
+        nav_layout.addWidget(models_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        # Add flexible spacing between each button
+        nav_layout.addStretch(1)
 
-        add_model_btn = QPushButton("Add Model")
-        add_model_btn.setFixedWidth(130)
+        add_model_btn = QPushButton("＋")
         add_model_btn.setStyleSheet(btn_style)
-        side_layout.addWidget(add_model_btn)
+        add_model_btn.setCheckable(True)
+        add_model_btn.setToolTip("Add Model")
+        nav_layout.addWidget(add_model_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        nav_layout.addStretch(1)
 
-        retrain_btn = QPushButton("Retrain")
-        retrain_btn.setFixedWidth(130)
+        retrain_btn = QPushButton("↻")
         retrain_btn.setStyleSheet(btn_style)
-        side_layout.addWidget(retrain_btn)
+        retrain_btn.setCheckable(True)
+        retrain_btn.setToolTip("Retrain")
+        nav_layout.addWidget(retrain_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        nav_layout.addStretch(1)
 
-        image_btn = QPushButton("Image")
-        image_btn.setFixedWidth(130)
+        image_btn = QPushButton("◯")
         image_btn.setStyleSheet(btn_style)
-        side_layout.addWidget(image_btn)
+        image_btn.setCheckable(True)
+        image_btn.setToolTip("Image")
+        nav_layout.addWidget(image_btn, 0, Qt.AlignmentFlag.AlignCenter)
 
-        side_layout.addStretch()
-        side_group.setLayout(side_layout)
-        side_group.setFixedWidth(150)
+        # Larger stretch for visual separator
+        nav_layout.addStretch(2)
+
+        # Image processing buttons with icons
+        self.load_btn = QPushButton("📁")
+        self.load_btn.setStyleSheet(btn_style)
+        self.load_btn.setToolTip("Load Image")
+        nav_layout.addWidget(self.load_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        nav_layout.addStretch(1)
+
+        self.segment_single_btn = QPushButton("▶")
+        self.segment_single_btn.setStyleSheet(btn_style)
+        self.segment_single_btn.setToolTip("Run Single Segmentation")
+        nav_layout.addWidget(self.segment_single_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        nav_layout.addStretch(1)
+
+        self.compare_btn = QPushButton("⊞")
+        self.compare_btn.setStyleSheet(btn_style)
+        self.compare_btn.setToolTip("Compare Segmentations")
+        nav_layout.addWidget(self.compare_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        nav_layout.addStretch(1)
+
+        self.folder_seg_btn = QPushButton("₂")
+        self.folder_seg_btn.setStyleSheet(btn_style)
+        self.folder_seg_btn.setToolTip("Run Folder Segmentation")
+        nav_layout.addWidget(self.folder_seg_btn, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # Add flexible spacing after buttons to center them
+        nav_layout.addStretch(1)
+        nav_group.setLayout(nav_layout)
+        nav_group.setFixedHeight(80)
 
         # === Main Content Area ===
         self.stack = QStackedWidget()
 
-        # Models View
+        # Initialize views
         self.models_view = ModelsView()
         self.stack.addWidget(self.models_view)
-        models_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.models_view))
 
-        # Add Model View
         self.add_model_view = AddModelView(self.models_view)
         self.stack.addWidget(self.add_model_view)
-        add_model_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.add_model_view))
 
-        # Image View
         self.image_view = ImageView(self.models_view)
         self.stack.addWidget(self.image_view)
-        image_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.image_view))
 
-        # Retrain View
         self.retrain_view = RetrainModelView()
         self.stack.addWidget(self.retrain_view)
-        retrain_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.retrain_view))
+
+        # Navigation button connections
+        self.nav_buttons = [models_btn, add_model_btn, retrain_btn, image_btn]
+        models_btn.clicked.connect(lambda: self.switch_view(self.models_view, models_btn))
+        add_model_btn.clicked.connect(lambda: self.switch_view(self.add_model_view, add_model_btn))
+        image_btn.clicked.connect(lambda: self.switch_view(self.image_view, image_btn))
+        retrain_btn.clicked.connect(lambda: self.switch_view(self.retrain_view, retrain_btn))
+
+        # Connect image processing buttons to image_view methods
+        self.load_btn.clicked.connect(self.image_view.load_image)
+        self.segment_single_btn.clicked.connect(self.image_view.run_single_image_segmentation)
+        self.compare_btn.clicked.connect(self.image_view.compare_segmentations)
+        self.folder_seg_btn.clicked.connect(self.image_view.run_cli_segmentation)
+
+        # Set default view
+        models_btn.setChecked(True)
 
         # === Assemble Layout ===
-        main_layout.addWidget(side_group)
+        main_layout.addWidget(nav_group)
         main_layout.addWidget(self.stack)
 
-
+    def switch_view(self, view, button):
+        # Uncheck all navigation buttons
+        for btn in self.nav_buttons:
+            btn.setChecked(False)
+        # Check the clicked button
+        button.setChecked(True)
+        # Switch to the view
+        self.stack.setCurrentWidget(view)
 
 if __name__ == "__main__":
     app = QApplication.instance()

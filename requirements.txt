@@ -14,3 +14,8 @@ torchvision==0.20.1
 
 # Omnipose (older working commit)
 omnipose==1.0.6
+
+# Cellpose
+cellpose==3.0.8
+
+watchdog
