@@ -22,11 +22,11 @@ class ModelsView(QWidget):
         super().__init__()
 
         self.models = {
-            "Coni_4": os.path.join("FiloGUI_models", "Coni_4.pth"),
-            "ConidioBUD": os.path.join("FiloGUI_models", "ConidioBUD.pth"),
-            "FilaBranch": os.path.join("FiloGUI_models", "FilaBranch.pth"),
-            "FilaCross_1": os.path.join("FiloGUI_models", "FilaCross_1.pth"),
-            "FilaSeptum_3": os.path.join("FiloGUI_models", "FilaSeptum_3.pth"),
+            "Coni_7": os.path.join("FiloGUI_models", "Coni_7.pth"),
+            "Phore_2": os.path.join("FiloGUI_models", "Phore_2.pth"),
+            "FilaBranch_2": os.path.join("FiloGUI_models", "FilaBranch_2.pth"),
+            "FilaCross_2": os.path.join("FiloGUI_models", "FilaCross_2.pth"),
+            "FilaSeptum_4": os.path.join("FiloGUI_models", "FilaSeptum_4.pth"),
             "FilaTip_6": os.path.join("FiloGUI_models", "FilaTip_6.pth"),
             "Retrain_omni_5": os.path.join("FiloGUI_models", "Retrain_omni_5.pth")
         }
@@ -199,7 +199,7 @@ class ImageView(QWidget):
             QMessageBox.warning(self, "No Image", "Please load an image first.")
             return
     
-        model_keys = ["FilaBranch", "FilaTip_6", "Retrain_omni_5","Coni_4","ConidioBUD","FilaCross_1","FilaSeptum_3"]
+        model_keys = ["FilaBranch", "FilaTip", "Retrain_omni","Coni","Phore","FilaCross","FilaSeptum"]
         image_path = self.current_image_path
         image_folder = os.path.dirname(image_path)
         image_filename = os.path.basename(image_path)
