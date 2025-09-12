@@ -387,13 +387,11 @@ class ImageView(QWidget):
         from PySide6.QtWidgets import QFileDialog, QMessageBox
     
         # STEP 1: Ask user to pick a folder
-        from PySide6.QtWidgets import QFileDialog
-        
         folder_path = QFileDialog.getExistingDirectory(
             self,
             "Select Folder Containing Time Series Images",
             "",
-            QFileDialog.Option(QFileDialog.DontUseNativeDialog)
+            QFileDialog.Option.DontUseNativeDialog
         )
 
         # If the user cancels or picks nothing
@@ -426,33 +424,14 @@ class ImageView(QWidget):
         self.save_dir = os.path.join(self.image_dir, model_key)
         os.makedirs(self.save_dir, exist_ok=True)
 
-        import cv2, tifffile
-
-        scaled_dir = os.path.join(self.image_dir, "scaled_inputs")
-        os.makedirs(scaled_dir, exist_ok=True)
-
-        scaled_files = []
-        for fname in image_files:
-            img_path = os.path.join(self.image_dir, fname)
-            img = tifffile.imread(img_path)
-            if img.ndim == 3:
-                img = img[0]
-            new_h, new_w = int(img.shape[0] * 1), int(img.shape[1] * 1)
-            img_resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
-
-            out_path = os.path.join(scaled_dir, fname)
-            tifffile.imwrite(out_path, img_resized)
-            scaled_files.append(out_path)
-
-        # ✅ Point CLI command to scaled_dir instead of original self.image_dir
-        self.image_dir = scaled_dir
+        # No image scaling - use original folder directly
     
-        # STEP 4: Build command
+        # STEP 4: Build command - removed scaling and use original image_dir
         if "omni" in model_key.lower():
             command = (
                 f'omnipose --dir "{self.image_dir}" '
                 f'--pretrained_model "{model_path}" --use_gpu --nchan 1 --nclasses 2 '
-                f'--verbose --save_tif --save_dtype uint16 '
+                f'--verbose --save_tif '
                 f'--savedir "{self.save_dir}" '
                 f'--look_one_level_down --no_npy'
             )
@@ -464,6 +443,8 @@ class ImageView(QWidget):
                 f'--diameter 0 '
                 f'--save_tif --savedir "{self.save_dir}"'
             )
+    
+        print(f"🔧 Running command:\n{command}")
     
         # STEP 5: Run the command
         try:
