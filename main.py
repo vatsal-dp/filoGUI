@@ -199,7 +199,7 @@ class ImageView(QWidget):
             QMessageBox.warning(self, "No Image", "Please load an image first.")
             return
     
-        model_keys = ["FilaBranch", "FilaTip", "Retrain_omni","Coni","Phore","FilaCross","FilaSeptum"]
+        model_keys = ["FilaBranch_2", "FilaTip_6", "Retrain_omni_5","Coni_7","Phore_2","FilaCross_2","FilaSeptum"]
         image_path = self.current_image_path
         image_folder = os.path.dirname(image_path)
         image_filename = os.path.basename(image_path)
@@ -382,7 +382,7 @@ class ImageView(QWidget):
         pass  # Your original model.eval() segmentation code can go here if needed.
 
     def run_cli_segmentation(self):
-        import subprocess, os
+        import subprocess, os, cv2, tifffile, shutil
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import QFileDialog, QMessageBox
     
@@ -424,20 +424,62 @@ class ImageView(QWidget):
         self.save_dir = os.path.join(self.image_dir, model_key)
         os.makedirs(self.save_dir, exist_ok=True)
 
-        # No image scaling - use original folder directly
-    
-        # STEP 4: Build command - removed scaling and use original image_dir
+        # STEP 4: PREPROCESS IMAGES (like single image function)
+        print(f"🔧 Preprocessing {len(image_files)} images...")
+        processed_count = 0
+
+        for image_file in image_files:
+            try:
+                image_path = os.path.join(self.image_dir, image_file)
+                image_basename = os.path.splitext(image_file)[0]
+                
+                # Load and process image (same as single image function)
+                orig_img = tifffile.imread(image_path)
+                if orig_img.ndim == 3:
+                    orig_img = orig_img[0]  # Take first channel if 3D
+                
+                # Resize (even if 1x scale, this normalizes the data)
+                new_h, new_w = int(orig_img.shape[0] * 1), int(orig_img.shape[1] * 1)
+                resized_img = cv2.resize(orig_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                
+                # Save processed image
+                temp_path = os.path.join(self.image_dir, image_basename + "_scaled.tif")
+                tifffile.imwrite(temp_path, resized_img)
+                processed_count += 1
+                
+            except Exception as e:
+                print(f"⚠️ Failed to process {image_file}: {e}")
+
+        if processed_count == 0:
+            QMessageBox.warning(self, "Processing Failed", "Failed to preprocess any images.")
+            return
+
+        print(f"✅ Successfully processed {processed_count} images")
+
+        # STEP 5: Create temporary directory with only processed images
+        temp_dir = os.path.join(self.image_dir, "temp_processed")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # Move processed images to temp directory
+        scaled_files = [f for f in os.listdir(self.image_dir) if f.endswith("_scaled.tif")]
+        for scaled_file in scaled_files:
+            src = os.path.join(self.image_dir, scaled_file)
+            dst = os.path.join(temp_dir, scaled_file)
+            shutil.copy2(src, dst)
+
+        print(f"📁 Created temp directory with {len(scaled_files)} processed images")
+        
+        # STEP 6: Build command - use temp directory
         if "omni" in model_key.lower():
             command = (
-                f'omnipose --dir "{self.image_dir}" '
+                f'omnipose --dir "{temp_dir}" '
                 f'--pretrained_model "{model_path}" --use_gpu --nchan 1 --nclasses 2 '
                 f'--verbose --save_tif '
-                f'--savedir "{self.save_dir}" '
-                f'--look_one_level_down --no_npy'
+                f'--savedir "{self.save_dir}" --no_npy'
             )
         else:
             command = (
-                f'cellpose --dir "{self.image_dir}" '
+                f'cellpose --dir "{temp_dir}" '
                 f'--pretrained_model "{model_path}" --verbose --use_gpu --chan 0 --chan2 0 '
                 f'--cellprob_threshold 0.0 --flow_threshold 0.4 '
                 f'--diameter 0 '
