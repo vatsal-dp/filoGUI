@@ -381,11 +381,128 @@ class ImageView(QWidget):
     def run_segmentation(self):
         pass  # Your original model.eval() segmentation code can go here if needed.
 
+    # def run_cli_segmentation(self):
+    #     import subprocess, os, cv2, tifffile, shutil
+    #     from PySide6.QtCore import QTimer
+    #     from PySide6.QtWidgets import QFileDialog, QMessageBox
+    
+    #     # STEP 1: Ask user to pick a folder
+    #     folder_path = QFileDialog.getExistingDirectory(
+    #         self,
+    #         "Select Folder Containing Time Series Images",
+    #         "",
+    #         QFileDialog.Option.DontUseNativeDialog
+    #     )
+
+    #     # If the user cancels or picks nothing
+    #     if not folder_path or folder_path.strip() == "":
+    #         QMessageBox.warning(self, "No Folder Selected", "Please select a folder to proceed.")
+    #         return
+    
+    #     self.image_dir = folder_path  # ✅ This is the selected folder
+    
+    #     model_key = self.models_view.selected_model
+    #     if model_key is None:
+    #         QMessageBox.warning(self, "Model Not Selected", "Please select a model before running segmentation.")
+    #         return
+    
+    #     model_path = self.models_view.models.get(model_key)
+    #     if not os.path.exists(model_path):
+    #         QMessageBox.warning(self, "Invalid Model", f"The selected model path does not exist:\n{model_path}")
+    #         return
+    
+    #     # STEP 2: Check for image files in the folder
+    #     image_files = [
+    #         f for f in os.listdir(self.image_dir)
+    #         if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff'))
+    #     ]
+    #     if not image_files:
+    #         QMessageBox.warning(self, "No Images Found", f"No valid image files found in:\n{self.image_dir}")
+    #         return
+    
+    #     # STEP 3: Create output folder named after the model
+    #     self.save_dir = os.path.join(self.image_dir, model_key)
+    #     os.makedirs(self.save_dir, exist_ok=True)
+
+    #     # STEP 4: PREPROCESS IMAGES (like single image function)
+    #     print(f"🔧 Preprocessing {len(image_files)} images...")
+    #     processed_count = 0
+
+    #     for image_file in image_files:
+    #         try:
+    #             image_path = os.path.join(self.image_dir, image_file)
+    #             image_basename = os.path.splitext(image_file)[0]
+                
+    #             # Load and process image (same as single image function)
+    #             orig_img = tifffile.imread(image_path)
+    #             if orig_img.ndim == 3:
+    #                 orig_img = orig_img[0]  # Take first channel if 3D
+                
+    #             # Resize (even if 1x scale, this normalizes the data)
+    #             new_h, new_w = int(orig_img.shape[0] * 1), int(orig_img.shape[1] * 1)
+    #             resized_img = cv2.resize(orig_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                
+    #             # Save processed image
+    #             temp_path = os.path.join(self.image_dir, image_basename + "_scaled.tif")
+    #             tifffile.imwrite(temp_path, resized_img)
+    #             processed_count += 1
+                
+    #         except Exception as e:
+    #             print(f"⚠️ Failed to process {image_file}: {e}")
+
+    #     if processed_count == 0:
+    #         QMessageBox.warning(self, "Processing Failed", "Failed to preprocess any images.")
+    #         return
+
+    #     print(f"✅ Successfully processed {processed_count} images")
+
+    #     # STEP 5: Create temporary directory with only processed images
+    #     temp_dir = os.path.join(self.image_dir, "temp_processed")
+    #     os.makedirs(temp_dir, exist_ok=True)
+
+    #     # Move processed images to temp directory
+    #     scaled_files = [f for f in os.listdir(self.image_dir) if f.endswith("_scaled.tif")]
+    #     for scaled_file in scaled_files:
+    #         src = os.path.join(self.image_dir, scaled_file)
+    #         dst = os.path.join(temp_dir, scaled_file)
+    #         shutil.move(src, dst)
+
+    #     print(f"📁 Created temp directory with {len(scaled_files)} processed images")
+        
+    #     # STEP 6: Build command - use temp directory
+    #     if "omni" in model_key.lower():
+    #         command = (
+    #             f'omnipose --dir "{temp_dir}" '
+    #             f'--pretrained_model "{model_path}" --use_gpu --nchan 1 --nclasses 2 '
+    #             f'--verbose --save_tif '
+    #             f'--savedir "{self.save_dir}" --no_npy'
+    #         )
+    #     else:
+    #         command = (
+    #             f'cellpose --dir "{temp_dir}" '
+    #             f'--pretrained_model "{model_path}" --verbose --use_gpu --chan 0 --chan2 0 '
+    #             f'--cellprob_threshold 0.0 --flow_threshold 0.4 '
+    #             f'--diameter 0 '
+    #             f'--save_tif --savedir "{self.save_dir}"'
+    #         )
+    
+    #     print(f"🔧 Running command:\n{command}")
+    
+    #     # STEP 5: Run the command
+    #     try:
+    #         subprocess.Popen(command, shell=True)
+    #         QMessageBox.information(self, "Running", f"Segmentation started with model '{model_key}' on {len(image_files)} image(s).")
+    #         self.check_timer = QTimer(self)
+    #         self.check_timer.timeout.connect(self.try_show_mask_from_save)
+    #         self.check_timer.start(5000)
+    #     except Exception as e:
+    #         QMessageBox.critical(self, "Error", str(e))
+
     def run_cli_segmentation(self):
         import subprocess, os, cv2, tifffile, shutil
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import QFileDialog, QMessageBox
-    
+
         # STEP 1: Ask user to pick a folder
         folder_path = QFileDialog.getExistingDirectory(
             self,
@@ -398,19 +515,19 @@ class ImageView(QWidget):
         if not folder_path or folder_path.strip() == "":
             QMessageBox.warning(self, "No Folder Selected", "Please select a folder to proceed.")
             return
-    
+
         self.image_dir = folder_path  # ✅ This is the selected folder
-    
+
         model_key = self.models_view.selected_model
         if model_key is None:
             QMessageBox.warning(self, "Model Not Selected", "Please select a model before running segmentation.")
             return
-    
+
         model_path = self.models_view.models.get(model_key)
         if not os.path.exists(model_path):
             QMessageBox.warning(self, "Invalid Model", f"The selected model path does not exist:\n{model_path}")
             return
-    
+
         # STEP 2: Check for image files in the folder
         image_files = [
             f for f in os.listdir(self.image_dir)
@@ -419,7 +536,11 @@ class ImageView(QWidget):
         if not image_files:
             QMessageBox.warning(self, "No Images Found", f"No valid image files found in:\n{self.image_dir}")
             return
-    
+
+        # Store the expected number of images for completion checking
+        self.expected_mask_count = len(image_files)
+        self.original_image_files = image_files.copy()  # Store original filenames
+
         # STEP 3: Create output folder named after the model
         self.save_dir = os.path.join(self.image_dir, model_key)
         os.makedirs(self.save_dir, exist_ok=True)
@@ -465,7 +586,7 @@ class ImageView(QWidget):
         for scaled_file in scaled_files:
             src = os.path.join(self.image_dir, scaled_file)
             dst = os.path.join(temp_dir, scaled_file)
-            shutil.copy2(src, dst)
+            shutil.move(src, dst)
 
         print(f"📁 Created temp directory with {len(scaled_files)} processed images")
         
@@ -485,18 +606,173 @@ class ImageView(QWidget):
                 f'--diameter 0 '
                 f'--save_tif --savedir "{self.save_dir}"'
             )
-    
+
         print(f"🔧 Running command:\n{command}")
-    
-        # STEP 5: Run the command
+
+        # STEP 7: Run the command
         try:
             subprocess.Popen(command, shell=True)
             QMessageBox.information(self, "Running", f"Segmentation started with model '{model_key}' on {len(image_files)} image(s).")
+            
+            # Initialize progress tracking
             self.check_timer = QTimer(self)
-            self.check_timer.timeout.connect(self.try_show_mask_from_save)
-            self.check_timer.start(5000)
+            self.check_timer.timeout.connect(self.check_folder_segmentation_progress)
+            self.check_timer.start(3000)  # Check every 3 seconds
+            
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+    def check_folder_segmentation_progress(self):
+        """Check progress of folder segmentation and load all completed overlays"""
+        import os
+        
+        if not os.path.exists(self.save_dir):
+            print("❌ Save folder not created yet.")
+            return
+
+        mask_files = [f for f in os.listdir(self.save_dir) if f.endswith("_cp_masks.tif")]
+        completed_count = len(mask_files)
+        
+        print(f"🔍 Progress: {completed_count}/{self.expected_mask_count} masks completed")
+        
+        # If all masks are completed, stop checking and load all overlays
+        if completed_count >= self.expected_mask_count:
+            print("✅ All segmentation completed!")
+            self.check_timer.stop()
+            self.load_all_folder_overlays()
+        elif completed_count > 0:
+            # Show partial progress but keep checking
+            print(f"⏳ Partial completion: {completed_count}/{self.expected_mask_count}")
+
+    def load_all_folder_overlays(self):
+        """Load all completed segmentation overlays for navigation"""
+        import os, io
+        import tifffile
+        import numpy as np
+        from PIL import Image
+        import matplotlib.pyplot as plt
+
+        print(f"🔍 Loading all overlays from: {self.save_dir}")
+        
+        if not os.path.exists(self.save_dir):
+            QMessageBox.warning(self, "Error", "Save directory not found.")
+            return
+
+        mask_files = [f for f in os.listdir(self.save_dir) if f.endswith("_cp_masks.tif")]
+        if not mask_files:
+            QMessageBox.warning(self, "No Results", "No mask files found.")
+            return
+
+        # Clear previous overlays
+        self.overlay_pixmaps = []
+        self.overlay_model_names = []
+
+        print(f"✅ Found {len(mask_files)} mask files")
+
+        try:
+            # Sort mask files to maintain consistent order
+            mask_files.sort()
+            
+            # Process all mask files
+            for mask_file in mask_files:
+                base_name = mask_file.replace("_cp_masks.tif", ".tif")
+                # Remove _scaled suffix if it exists to find original image
+                if base_name.endswith("_scaled.tif"):
+                    original_name = base_name.replace("_scaled.tif", ".tif")
+                else:
+                    original_name = base_name
+
+                mask_path = os.path.join(self.save_dir, mask_file)
+                
+                # Try to find the original image
+                image_path = None
+                for potential_name in [base_name, original_name]:
+                    potential_path = os.path.join(self.image_dir, potential_name)
+                    if os.path.exists(potential_path):
+                        image_path = potential_path
+                        break
+                
+                if not image_path:
+                    print(f"⚠️ Original image not found for: {mask_file}")
+                    continue
+
+                print(f"✅ Processing: {mask_file} with image: {os.path.basename(image_path)}")
+
+                image = tifffile.imread(image_path)
+                mask = tifffile.imread(mask_path)
+
+                if image.ndim == 3:
+                    image = image[0]
+                if mask.ndim == 3:
+                    mask = mask[0]
+
+                # === Process original image for consistent display ===
+                img_min, img_max = np.percentile(image, (1, 99))
+                img_norm = np.clip((image - img_min) / (img_max - img_min), 0, 1)
+                img_uint8 = (img_norm * 255).astype(np.uint8)
+
+                # === Create overlay image ===
+                image_rgb = np.stack([img_uint8] * 3, axis=-1)
+            
+                # Create colored mask with jet colormap
+                cmap = plt.get_cmap('jet')
+                if mask.max() == 0:
+                    colored_mask = np.zeros((*mask.shape, 3), dtype=np.uint8)
+                else:
+                    colored_mask = cmap(mask.astype(np.float32) / mask.max())[:, :, :3]
+                    colored_mask = (colored_mask * 255).astype(np.uint8)
+
+                # Alpha mask where mask > 0
+                alpha = (mask > 0)[..., np.newaxis]
+
+                # Blend grayscale and mask
+                blended = image_rgb * (1 - alpha) + colored_mask * alpha
+                blended = blended.astype(np.uint8)
+
+                overlay_pil = Image.fromarray(blended)
+
+                buf = io.BytesIO()
+                overlay_pil.save(buf, format="PNG")
+                buf.seek(0)
+
+                pixmap = QPixmap()
+                pixmap.loadFromData(buf.read(), "PNG")
+                
+                # Add to overlay arrays
+                self.overlay_pixmaps.append(pixmap)
+                # Use the original filename without _scaled suffix for display
+                display_name = original_name.replace(".tif", "")
+                if hasattr(self, 'models_view') and self.models_view.selected_model:
+                    display_name = f"{self.models_view.selected_model} - {display_name}"
+                self.overlay_model_names.append(display_name)
+
+            # Display the first overlay if we have any
+            if self.overlay_pixmaps:
+                self.overlay_index = 0
+                self.image_label.setPixmap(
+                    self.overlay_pixmaps[0].scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                )
+                self.model_name_label.setText(self.overlay_model_names[0])
+                
+                # Enable navigation buttons if we have multiple overlays
+                if len(self.overlay_pixmaps) > 1:
+                    self.prev_btn.setEnabled(True)
+                    self.next_btn.setEnabled(True)
+                    QMessageBox.information(
+                        self, "Segmentation Complete", 
+                        f"Processed {len(self.overlay_pixmaps)} images successfully!\nUse Previous/Next buttons to navigate through results."
+                    )
+                else:
+                    self.prev_btn.setEnabled(False)
+                    self.next_btn.setEnabled(False)
+                    QMessageBox.information(self, "Segmentation Complete", "Single image processed successfully.")
+            else:
+                QMessageBox.warning(self, "No Results", "No valid overlays could be created.")
+
+        except Exception as e:
+            import traceback
+            print("❌ Error loading overlays:", traceback.format_exc())
+            QMessageBox.critical(self, "Display Error", str(e))
 
     def try_show_mask_from_save(self):
         import os, io
@@ -504,102 +780,229 @@ class ImageView(QWidget):
         import numpy as np
         from PIL import Image
         import matplotlib.pyplot as plt
-    
+
         print(f"🔍 Checking folder: {self.save_dir}")
         if not os.path.exists(self.save_dir):
             print("❌ Save folder not created yet.")
             return
-    
+
         mask_files = [f for f in os.listdir(self.save_dir) if f.endswith("_cp_masks.tif")]
         if not mask_files:
             print("⏳ No masks found yet.")
             return
-    
-        mask_file = mask_files[0]
-        base_name = mask_file.replace("_cp_masks.tif", ".tif")
-    
-        mask_path = os.path.join(self.save_dir, mask_file)
-        image_path = os.path.join(self.image_dir, base_name)
-    
-        if not os.path.exists(image_path):
-            print(f"⚠️ Original image not found: {image_path}")
-            return
-    
-        print(f"✅ Found mask: {mask_path}")
-        print(f"✅ Found image: {image_path}")
+
+        # Stop the timer since we found masks
         self.check_timer.stop()
-    
-        try:
-            image = tifffile.imread(image_path)
-            mask = tifffile.imread(mask_path)
-
-            print(f"🔍 DEBUG - Original image shape: {image.shape}, dtype: {image.dtype}")
-            print(f"🔍 DEBUG - Original image min/max: {image.min()}/{image.max()}")
-            print(f"🔍 DEBUG - Original mask shape: {mask.shape}, dtype: {mask.dtype}")
-            print(f"🔍 DEBUG - Original mask min/max: {mask.min()}/{mask.max()}")
-            print(f"🔍 DEBUG - Unique mask values: {np.unique(mask)}")
-    
-            if image.ndim == 3:
-                image = image[0]
-            if mask.ndim == 3:
-                mask = mask[0]
-
-            if image.ndim == 3:
-                print(f"🔍 DEBUG - Image reduced to 2D: {image.shape}")
-            if mask.ndim == 3:
-                print(f"🔍 DEBUG - Mask reduced to 2D: {mask.shape}")
-    
-            # === Process original image for consistent display ===
-            img_min, img_max = np.percentile(image, (1, 99))
-            img_norm = np.clip((image - img_min) / (img_max - img_min), 0, 1)
-            img_uint8 = (img_norm * 255).astype(np.uint8)
-
-            print(f"🔍 DEBUG - Image after normalization shape: {img_uint8.shape}, dtype: {img_uint8.dtype}")
-            print(f"🔍 DEBUG - Normalized image min/max: {img_uint8.min()}/{img_uint8.max()}")  
-
-            print(f"🔍 DEBUG - Image for overlay shape: {image.shape}")
-            print(f"🔍 DEBUG - Mask for overlay shape: {mask.shape}")
-            print(f"🔍 DEBUG - Mask for overlay unique values: {np.unique(mask)}")
-            print(f"🔍 DEBUG - Non-zero mask pixels count: {np.count_nonzero(mask)}")
-    
-            # === Create overlay image ===
-            image_rgb = np.stack([img_uint8] * 3, axis=-1)
         
-            # Create colored mask with jet colormap
-            cmap = plt.get_cmap('jet')
-            if mask.max() == 0:
-                colored_mask = np.zeros((*mask.shape, 3), dtype=np.uint8)
-            else:
-                colored_mask = cmap(mask.astype(np.float32) / mask.max())[:, :, :3]
-                colored_mask = (colored_mask * 255).astype(np.uint8)
+        # Clear previous overlays
+        self.overlay_pixmaps = []
+        self.overlay_model_names = []
 
-            # Alpha mask where mask > 0
-            alpha = (mask > 0)[..., np.newaxis]
+        print(f"✅ Found {len(mask_files)} mask files")
 
-            # Blend grayscale and mask
-            blended = image_rgb * (1 - alpha) + colored_mask * alpha
-            blended = blended.astype(np.uint8)
+        try:
+            # Process all mask files
+            for mask_file in mask_files:
+                base_name = mask_file.replace("_cp_masks.tif", ".tif")
+                # Also try without _scaled suffix if it exists
+                if base_name.endswith("_scaled.tif"):
+                    original_name = base_name.replace("_scaled.tif", ".tif")
+                else:
+                    original_name = base_name
 
-            overlay_pil = Image.fromarray(blended)
-    
-            buf = io.BytesIO()
-            overlay_pil.save(buf, format="PNG")
-            buf.seek(0)
-    
-            pixmap_mask = QPixmap()
-            pixmap_mask.loadFromData(buf.read(), "PNG")
-            self.image_label.setPixmap(pixmap_mask.scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                mask_path = os.path.join(self.save_dir, mask_file)
+                
+                # Try to find the original image
+                image_path = None
+                for potential_name in [base_name, original_name]:
+                    potential_path = os.path.join(self.image_dir, potential_name)
+                    if os.path.exists(potential_path):
+                        image_path = potential_path
+                        break
+                
+                if not image_path:
+                    print(f"⚠️ Original image not found for: {mask_file}")
+                    continue
+
+                print(f"✅ Processing: {mask_file} with image: {os.path.basename(image_path)}")
+
+                image = tifffile.imread(image_path)
+                mask = tifffile.imread(mask_path)
+
+                if image.ndim == 3:
+                    image = image[0]
+                if mask.ndim == 3:
+                    mask = mask[0]
+
+                # === Process original image for consistent display ===
+                img_min, img_max = np.percentile(image, (1, 99))
+                img_norm = np.clip((image - img_min) / (img_max - img_min), 0, 1)
+                img_uint8 = (img_norm * 255).astype(np.uint8)
+
+                # === Create overlay image ===
+                image_rgb = np.stack([img_uint8] * 3, axis=-1)
             
-            # Set the model name
-            if hasattr(self, 'models_view') and self.models_view.selected_model:
-                self.model_name_label.setText(self.models_view.selected_model)
-    
-            QMessageBox.information(self, "Done", "Segmentation overlay displayed.")
-    
+                # Create colored mask with jet colormap
+                cmap = plt.get_cmap('jet')
+                if mask.max() == 0:
+                    colored_mask = np.zeros((*mask.shape, 3), dtype=np.uint8)
+                else:
+                    colored_mask = cmap(mask.astype(np.float32) / mask.max())[:, :, :3]
+                    colored_mask = (colored_mask * 255).astype(np.uint8)
+
+                # Alpha mask where mask > 0
+                alpha = (mask > 0)[..., np.newaxis]
+
+                # Blend grayscale and mask
+                blended = image_rgb * (1 - alpha) + colored_mask * alpha
+                blended = blended.astype(np.uint8)
+
+                overlay_pil = Image.fromarray(blended)
+
+                buf = io.BytesIO()
+                overlay_pil.save(buf, format="PNG")
+                buf.seek(0)
+
+                pixmap = QPixmap()
+                pixmap.loadFromData(buf.read(), "PNG")
+                
+                # Add to overlay arrays
+                self.overlay_pixmaps.append(pixmap)
+                # Use the original filename without _scaled suffix for display
+                display_name = original_name.replace(".tif", "")
+                if hasattr(self, 'models_view') and self.models_view.selected_model:
+                    display_name = f"{self.models_view.selected_model} - {display_name}"
+                self.overlay_model_names.append(display_name)
+
+            # Display the first overlay if we have any
+            if self.overlay_pixmaps:
+                self.overlay_index = 0
+                self.image_label.setPixmap(
+                    self.overlay_pixmaps[0].scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                )
+                self.model_name_label.setText(self.overlay_model_names[0])
+                
+                # Enable navigation buttons if we have multiple overlays
+                if len(self.overlay_pixmaps) > 1:
+                    self.prev_btn.setEnabled(True)
+                    self.next_btn.setEnabled(True)
+                    QMessageBox.information(
+                        self, "Done", 
+                        f"Segmentation complete! {len(self.overlay_pixmaps)} overlays ready. Use Previous/Next buttons to navigate."
+                    )
+                else:
+                    self.prev_btn.setEnabled(False)
+                    self.next_btn.setEnabled(False)
+                    QMessageBox.information(self, "Done", "Segmentation overlay displayed.")
+            else:
+                QMessageBox.warning(self, "No Results", "No valid overlays could be created.")
+
         except Exception as e:
             import traceback
             print("❌ Error showing overlay:", traceback.format_exc())
             QMessageBox.critical(self, "Display Error", str(e))
+    # def try_show_mask_from_save(self):
+    #     import os, io
+    #     import tifffile
+    #     import numpy as np
+    #     from PIL import Image
+    #     import matplotlib.pyplot as plt
+    
+    #     print(f"🔍 Checking folder: {self.save_dir}")
+    #     if not os.path.exists(self.save_dir):
+    #         print("❌ Save folder not created yet.")
+    #         return
+    
+    #     mask_files = [f for f in os.listdir(self.save_dir) if f.endswith("_cp_masks.tif")]
+    #     if not mask_files:
+    #         print("⏳ No masks found yet.")
+    #         return
+    
+    #     mask_file = mask_files[0]
+    #     base_name = mask_file.replace("_cp_masks.tif", ".tif")
+    
+    #     mask_path = os.path.join(self.save_dir, mask_file)
+    #     image_path = os.path.join(self.image_dir, base_name)
+    
+    #     if not os.path.exists(image_path):
+    #         print(f"⚠️ Original image not found: {image_path}")
+    #         return
+    
+    #     print(f"✅ Found mask: {mask_path}")
+    #     print(f"✅ Found image: {image_path}")
+    #     self.check_timer.stop()
+    
+    #     try:
+    #         image = tifffile.imread(image_path)
+    #         mask = tifffile.imread(mask_path)
+
+    #         print(f"🔍 DEBUG - Original image shape: {image.shape}, dtype: {image.dtype}")
+    #         print(f"🔍 DEBUG - Original image min/max: {image.min()}/{image.max()}")
+    #         print(f"🔍 DEBUG - Original mask shape: {mask.shape}, dtype: {mask.dtype}")
+    #         print(f"🔍 DEBUG - Original mask min/max: {mask.min()}/{mask.max()}")
+    #         print(f"🔍 DEBUG - Unique mask values: {np.unique(mask)}")
+    
+    #         if image.ndim == 3:
+    #             image = image[0]
+    #         if mask.ndim == 3:
+    #             mask = mask[0]
+
+    #         if image.ndim == 3:
+    #             print(f"🔍 DEBUG - Image reduced to 2D: {image.shape}")
+    #         if mask.ndim == 3:
+    #             print(f"🔍 DEBUG - Mask reduced to 2D: {mask.shape}")
+    
+    #         # === Process original image for consistent display ===
+    #         img_min, img_max = np.percentile(image, (1, 99))
+    #         img_norm = np.clip((image - img_min) / (img_max - img_min), 0, 1)
+    #         img_uint8 = (img_norm * 255).astype(np.uint8)
+
+    #         print(f"🔍 DEBUG - Image after normalization shape: {img_uint8.shape}, dtype: {img_uint8.dtype}")
+    #         print(f"🔍 DEBUG - Normalized image min/max: {img_uint8.min()}/{img_uint8.max()}")  
+
+    #         print(f"🔍 DEBUG - Image for overlay shape: {image.shape}")
+    #         print(f"🔍 DEBUG - Mask for overlay shape: {mask.shape}")
+    #         print(f"🔍 DEBUG - Mask for overlay unique values: {np.unique(mask)}")
+    #         print(f"🔍 DEBUG - Non-zero mask pixels count: {np.count_nonzero(mask)}")
+    
+    #         # === Create overlay image ===
+    #         image_rgb = np.stack([img_uint8] * 3, axis=-1)
+        
+    #         # Create colored mask with jet colormap
+    #         cmap = plt.get_cmap('jet')
+    #         if mask.max() == 0:
+    #             colored_mask = np.zeros((*mask.shape, 3), dtype=np.uint8)
+    #         else:
+    #             colored_mask = cmap(mask.astype(np.float32) / mask.max())[:, :, :3]
+    #             colored_mask = (colored_mask * 255).astype(np.uint8)
+
+    #         # Alpha mask where mask > 0
+    #         alpha = (mask > 0)[..., np.newaxis]
+
+    #         # Blend grayscale and mask
+    #         blended = image_rgb * (1 - alpha) + colored_mask * alpha
+    #         blended = blended.astype(np.uint8)
+
+    #         overlay_pil = Image.fromarray(blended)
+    
+    #         buf = io.BytesIO()
+    #         overlay_pil.save(buf, format="PNG")
+    #         buf.seek(0)
+    
+    #         pixmap_mask = QPixmap()
+    #         pixmap_mask.loadFromData(buf.read(), "PNG")
+    #         self.image_label.setPixmap(pixmap_mask.scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            
+    #         # Set the model name
+    #         if hasattr(self, 'models_view') and self.models_view.selected_model:
+    #             self.model_name_label.setText(self.models_view.selected_model)
+    
+    #         QMessageBox.information(self, "Done", "Segmentation overlay displayed.")
+    
+    #     except Exception as e:
+    #         import traceback
+    #         print("❌ Error showing overlay:", traceback.format_exc())
+    #         QMessageBox.critical(self, "Display Error", str(e))
 
 
     # (Methods remain unchanged: select_image_folder, select_model, run_training)
