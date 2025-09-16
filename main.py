@@ -1291,7 +1291,7 @@ class TrackingView(QWidget):
         # pos = 'Pos13_1_B' # name of folder, could be made into a loop
         # path = '/Users\oargell\Documents\Toy_datasets\Pos13_1_B/' # absolute path to the folder with the masks
         # sav_path = '/Users\oargell\Desktop/' # absolute path to the folder where teh results will be saved
-        pos = ""
+        pos = os.path.basename(self.mask_dir)
         path = self.mask_dir + "/"  # absolute path to the folder with the masks
         sav_path = self.output_dir + "/"  # absolute path to the folder where teh results
 
@@ -1771,12 +1771,40 @@ class TrackingView(QWidget):
 
 
         # check tracks are saved oK by Loading data from the file
-        with open('/Users\oargell\Desktop/Pos13_1_B_Tracks_file.pklt', 'rb') as file:
-            loaded_data = pickle.load(file)
+        # with open('/Users\oargell\Desktop/Pos13_1_B_Tracks_file.pklt', 'rb') as file:
+        #     loaded_data = pickle.load(file)
 
-        loaded_tensor = np.load('/Users\oargell\Desktop/Pos13_1_B_Tracks.npy')
-        print(loaded_data)
-        print(loaded_tensor)
+        # loaded_tensor = np.load('/Users\oargell\Desktop/Pos13_1_B_Tracks.npy')
+
+        # Use dynamic paths based on user selection
+        tracks_file_path = os.path.join(self.output_dir, f'{pos}_Tracks_vars_file.pklt')
+        tracks_tensor_path = os.path.join(self.output_dir, f'{pos}_Tracks.npy')
+
+        # Check if files were created successfully before trying to load them
+        if os.path.exists(tracks_file_path) and os.path.exists(tracks_tensor_path):
+            try:
+                with open(tracks_file_path, 'rb') as file:
+                    loaded_data = pickle.load(file)
+                
+                loaded_tensor = np.load(tracks_tensor_path)
+                print("Files loaded successfully:")
+                print(loaded_data)
+                print(f"Tensor shape: {loaded_tensor.shape}")
+                
+                # Show final plot
+                plt.figure()
+                plt.imshow(loaded_tensor[:,:,0], aspect='auto', cmap='viridis', interpolation="nearest")
+                plt.title("First Frame - Tracked Objects")
+                plt.xlabel("X")
+                plt.ylabel("Y")
+                self.capture_plot("First Frame - Tracked Objects")
+                
+            except Exception as e:
+                print(f"Error loading saved files: {e}")
+        else:
+            print("Warning: Saved files not found, but tracking completed.")
+            print(loaded_data)
+            print(loaded_tensor)
 
 
         plt.figure()
