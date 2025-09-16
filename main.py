@@ -1193,6 +1193,41 @@ class TrackingView(QWidget):
         
         # Add stretch to push everything to the top
         self.layout.addStretch()
+
+        # Image display area
+        self.image_display = QLabel()
+        self.image_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_display.setMinimumSize(600, 400)
+        self.image_display.setStyleSheet("border: 1px solid #ddd; background-color: #f9f9f9;")
+        self.image_display.setText("Tracking visualizations will appear here")
+        self.layout.addWidget(self.image_display)
+
+        # Navigation for multiple plots
+        nav_layout = QHBoxLayout()
+        nav_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.prev_plot_btn = QPushButton("← Previous Plot")
+        self.prev_plot_btn.setFixedWidth(120)
+        self.prev_plot_btn.clicked.connect(self.show_prev_plot)
+        nav_layout.addWidget(self.prev_plot_btn)
+
+        nav_layout.addSpacing(20)
+
+        self.next_plot_btn = QPushButton("Next Plot →")
+        self.next_plot_btn.setFixedWidth(120)
+        self.next_plot_btn.clicked.connect(self.show_next_plot)
+        nav_layout.addWidget(self.next_plot_btn)
+
+        self.layout.addLayout(nav_layout)
+
+        # Initially disable navigation buttons
+        self.prev_plot_btn.setEnabled(False)
+        self.next_plot_btn.setEnabled(False)
+
+        # Plot navigation properties
+        self.current_plot_index = 0
+        self.plot_pixmaps = []
+        self.plot_titles = []
     
     def select_mask_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Mask Directory")
@@ -1205,9 +1240,48 @@ class TrackingView(QWidget):
         if folder:
             self.output_dir = folder
             self.status.setText(f"Output folder selected: {os.path.basename(folder)}")
-        # UI elements for folder selection and tracking button
-        # ... (UI code here)
+        
+
+    def show_prev_plot(self):
+        if self.plot_pixmaps:
+            self.current_plot_index = (self.current_plot_index - 1) % len(self.plot_pixmaps)
+            self.display_current_plot()
+
+    def show_next_plot(self):
+        if self.plot_pixmaps:
+            self.current_plot_index = (self.current_plot_index + 1) % len(self.plot_pixmaps)
+            self.display_current_plot()
+
+    def display_current_plot(self):
+        if self.plot_pixmaps:
+            pixmap = self.plot_pixmaps[self.current_plot_index]
+            title = self.plot_titles[self.current_plot_index]
+            self.image_display.setPixmap(pixmap.scaled(600, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.status.setText(f"Showing: {title} ({self.current_plot_index + 1}/{len(self.plot_pixmaps)})")
     
+    # Instead of plt.show(), capture the plot
+    def capture_plot(self,title):
+        import io
+        from PIL import Image
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        
+        # Convert to QPixmap
+        pil_image = Image.open(buf)
+        buf2 = io.BytesIO()
+        pil_image.save(buf2, format='PNG')
+        buf2.seek(0)
+        
+        pixmap = QPixmap()
+        pixmap.loadFromData(buf2.read(), "PNG")
+        
+        self.plot_pixmaps.append(pixmap)
+        self.plot_titles.append(title)
+        
+        plt.close()  # Close the figure to free memory
+        
     def run_tracking(self):
 
         if not self.mask_dir or not self.output_dir:
@@ -1391,7 +1465,8 @@ class TrackingView(QWidget):
         plt.title("all_obj")
         plt.xlabel("Time")
         plt.ylabel("Cells")
-        plt.show()
+        # plt.show()
+        self.capture_plot("All Objects Heatmap")
 
         """
         Ensure all cells numbered 1-n if necessary: the tracking loop assigns a unique index to all cells, but they might not be continous 
@@ -1434,7 +1509,8 @@ class TrackingView(QWidget):
         plt.title("Cell Presence Over Time")
         plt.xlabel("Time")
         plt.ylabel("Cells")
-        plt.show()
+        # plt.show()
+        self.capture_plot("Cell Presence Heatmap")
 
 
         """
@@ -1516,8 +1592,8 @@ class TrackingView(QWidget):
         plt.title("Cell Presence Over Time")
         plt.xlabel("Time")
         plt.ylabel("Cells")
-        plt.show()
-
+        # plt.show()
+        self.capture_plot("Cell Presence Heatmap After Splitting")
 
 
         """
@@ -1567,7 +1643,8 @@ class TrackingView(QWidget):
         plt.title("Cell Presence Over Time")
         plt.xlabel("Time")
         plt.ylabel("Cells")
-        plt.show()
+        # plt.show()
+        self.capture_plot("Cell Presence Heatmap After Removing Artifacts")
 
 
         """
@@ -1621,7 +1698,9 @@ class TrackingView(QWidget):
         plt.title("Cell Presence Over Time")
         plt.xlabel("Time")
         plt.ylabel("Cells")
-        plt.show()
+        # plt.show()    
+        self.capture_plot("Final Cell Presence Heatmap After Sorting")
+
 
         """
         Calculate object size if necessary
@@ -1705,6 +1784,21 @@ class TrackingView(QWidget):
         plt.title("Cell Sizes Over Time")
         plt.xlabel("Time")
         plt.ylabel("Cells")
+        self.capture_plot("Sample Tracked Mask Frame")
+
+        # After tracking completes
+        if self.plot_pixmaps:
+            self.current_plot_index = 0
+            self.display_current_plot()
+            self.prev_plot_btn.setEnabled(True)
+            self.next_plot_btn.setEnabled(True)
+            
+            QMessageBox.information(self, "Tracking Complete", 
+                                f"Tracking completed successfully!\n"
+                                f"Generated {len(self.plot_pixmaps)} visualization plots.\n"
+                                f"Results saved to: {self.output_dir}")
+
+
 
 
 class PlaceholderView(QWidget):
